@@ -1,6 +1,7 @@
 import { CodexToolHandler } from '../tools/handlers.js';
 import { InMemorySessionStorage } from '../session/storage.js';
 import { executeCommand } from '../utils/command.js';
+import { DEFAULT_CODEX_MODEL, DEFAULT_REASONING_EFFORT } from '../types.js';
 
 // Mock the command execution
 jest.mock('../utils/command.js', () => ({
@@ -34,6 +35,7 @@ describe('Codex Resume Functionality', () => {
     mockedExecuteCommand.mockClear();
     process.env.STRUCTURED_CONTENT_ENABLED = '1';
     delete process.env.CODEX_MCP_CALLBACK_URI;
+    delete process.env.CODEX_DEFAULT_REASONING_EFFORT;
   });
 
   test('should use exec for new session without codex session ID', async () => {
@@ -50,13 +52,13 @@ describe('Codex Resume Functionality', () => {
 
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       'codex',
-      [
+      expect.arrayContaining([
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '--skip-git-repo-check',
         'First message',
-      ],
+      ]),
       expect.any(Object)
     );
   });
@@ -79,6 +81,7 @@ describe('Codex Resume Functionality', () => {
   });
 
   test('should surface threadId in response metadata when present', async () => {
+    const sessionId = sessionStorage.createSession();
     mockedExecuteCommand.mockResolvedValue({
       stdout: 'thread id: th_123',
       stderr: '',
@@ -86,6 +89,7 @@ describe('Codex Resume Functionality', () => {
 
     const result = await handler.execute({
       prompt: 'Thread metadata check',
+      sessionId,
     });
 
     expect(result.content[0]._meta?.threadId).toBe('th_123');
@@ -93,6 +97,7 @@ describe('Codex Resume Functionality', () => {
   });
 
   test('should surface threadId when stderr has output and stdout contains thread id', async () => {
+    const sessionId = sessionStorage.createSession();
     mockedExecuteCommand.mockResolvedValue({
       stdout: 'thread id: th_stdout_456',
       stderr: 'warning: noisy stderr output',
@@ -100,6 +105,7 @@ describe('Codex Resume Functionality', () => {
 
     const result = await handler.execute({
       prompt: 'Thread metadata mixed output',
+      sessionId,
     });
 
     expect(result.content[0]._meta?.threadId).toBe('th_stdout_456');
@@ -107,6 +113,7 @@ describe('Codex Resume Functionality', () => {
   });
 
   test('should surface threadId when stdout has noise and stderr contains thread id', async () => {
+    const sessionId = sessionStorage.createSession();
     mockedExecuteCommand.mockResolvedValue({
       stdout: 'log: stdout noise',
       stderr: 'thread id: th_stderr_789',
@@ -114,6 +121,7 @@ describe('Codex Resume Functionality', () => {
 
     const result = await handler.execute({
       prompt: 'Thread metadata mixed output stderr',
+      sessionId,
     });
 
     expect(result.content[0]._meta?.threadId).toBe('th_stderr_789');
@@ -121,6 +129,7 @@ describe('Codex Resume Functionality', () => {
   });
 
   test('should pass callback URI via environment when provided', async () => {
+    const sessionId = sessionStorage.createSession();
     mockedExecuteCommand.mockResolvedValue({
       stdout: 'Test response',
       stderr: '',
@@ -128,6 +137,7 @@ describe('Codex Resume Functionality', () => {
 
     await handler.execute({
       prompt: 'Callback check',
+      sessionId,
       callbackUri: 'http://localhost:1234/callback',
     });
 
@@ -166,7 +176,9 @@ describe('Codex Resume Functionality', () => {
         'exec',
         '--skip-git-repo-check',
         '-c',
-        'model="gpt-5.3-codex"',
+        `model="${DEFAULT_CODEX_MODEL}"`,
+        '-c',
+        `model_reasoning_effort="${DEFAULT_REASONING_EFFORT}"`,
         'resume',
         'existing-codex-session-id',
         'Continue the task',
@@ -193,13 +205,13 @@ describe('Codex Resume Functionality', () => {
     // Should use exec (not resume) and get new session ID
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       'codex',
-      [
+      expect.arrayContaining([
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '--skip-git-repo-check',
         'Reset and start new',
-      ],
+      ]),
       expect.any(Object)
     );
     expect(sessionStorage.getCodexConversationId(sessionId)).toBe(
@@ -227,9 +239,15 @@ describe('Codex Resume Functionality', () => {
       sessionId,
     });
 
-    // Should build enhanced prompt since no codex session ID
+    // Should build enhanced prompt since no codex session ID.
+    // Locate the prompt in the args array by finding the entry that contains
+    // our task text — args layout shifts with defaults, so don't hardcode index.
     const call = mockedExecuteCommand.mock.calls[0];
-    const sentPrompt = call?.[1]?.[4]; // After exec, --model, gpt-5.3-codex, --skip-git-repo-check, prompt
+    const args = (call?.[1] as string[]) || [];
+    const sentPrompt = args.find(
+      (a) => typeof a === 'string' && a.includes('Follow up question')
+    );
+    expect(sentPrompt).toBeDefined();
     expect(sentPrompt).toContain('Context:');
     expect(sentPrompt).toContain('Task: Follow up question');
   });

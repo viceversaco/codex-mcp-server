@@ -59,9 +59,14 @@ describe('Context Building Analysis', () => {
     // Execute with context
     await handler.execute({ prompt: 'Make it more efficient', sessionId });
 
-    // Check what prompt was sent to Codex - should be enhanced but not conversational
+    // The enhanced prompt is the last arg passed to codex. Locate it by content
+    // rather than hardcoded index — args layout shifts as defaults are added.
     const call = mockedExecuteCommand.mock.calls[0];
-    const sentPrompt = call?.[1]?.[4]; // After exec, --model, gpt-5.3-codex, --skip-git-repo-check, prompt
+    const args = (call?.[1] as string[]) || [];
+    const sentPrompt = args.find(
+      (a) => typeof a === 'string' && a.includes('Task: Make it more efficient')
+    );
+    expect(sentPrompt).toBeDefined();
     expect(sentPrompt).toContain('Previous code context:');
     expect(sentPrompt).toContain('Task: Make it more efficient');
     expect(sentPrompt).not.toContain('Previous: What is recursion?'); // No conversational format
@@ -70,14 +75,21 @@ describe('Context Building Analysis', () => {
   test('should not automatically create sessions', async () => {
     const initialSessions = sessionStorage.listSessions().length;
 
-    await handler.execute({ prompt: 'Simple test' });
+    const sessionId = sessionStorage.createSession();
+    // Track sessions after createSession but before handler.execute
+    const afterCreateSessions = sessionStorage.listSessions().length;
+
+    await handler.execute({ prompt: 'Simple test', sessionId });
 
     const newSessions = sessionStorage.listSessions().length;
-    expect(newSessions).toBe(initialSessions); // No automatic session creation
+    // Handler should not create additional sessions beyond the one we explicitly created
+    expect(newSessions).toBe(afterCreateSessions);
+    expect(afterCreateSessions).toBe(initialSessions + 1);
   });
 
-  test('should work without sessions by default', async () => {
-    const result = await handler.execute({ prompt: 'Simple test' });
+  test('should work with sessions by default', async () => {
+    const sessionId = sessionStorage.createSession();
+    const result = await handler.execute({ prompt: 'Simple test', sessionId });
 
     expect(result.content[0].text).toBe('Test response'); // No session noise
   });

@@ -62,7 +62,16 @@ describe('Codex MCP Server', () => {
       );
       expect(codexTool).toBeDefined();
       expect(codexTool?.inputSchema.required).toContain('prompt');
-      expect(codexTool?.description).toContain('Execute Codex CLI');
+      // Loose assertion: the description mentions Codex (avoids breaking when
+      // the marketing wording shifts again — fork rewrote it as "Consult OpenAI Codex…").
+      expect(codexTool?.description).toMatch(/Codex/i);
+    });
+
+    test('codex tool should require sessionId (forked default)', () => {
+      const codexTool = toolDefinitions.find(
+        (tool) => tool.name === TOOLS.CODEX
+      );
+      expect(codexTool?.inputSchema.required).toContain('sessionId');
     });
 
     test('ping tool should have optional message parameter', () => {

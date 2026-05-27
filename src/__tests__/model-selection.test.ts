@@ -1,6 +1,7 @@
 import { CodexToolHandler } from '../tools/handlers.js';
 import { InMemorySessionStorage } from '../session/storage.js';
 import { executeCommand } from '../utils/command.js';
+import { DEFAULT_CODEX_MODEL } from '../types.js';
 
 // Mock the command execution
 jest.mock('../utils/command.js', () => ({
@@ -37,24 +38,35 @@ describe('Model Selection and Reasoning Effort', () => {
       stderr: '',
     });
     process.env.STRUCTURED_CONTENT_ENABLED = '1';
+    delete process.env.CODEX_DEFAULT_REASONING_EFFORT;
   });
 
   test('should pass model parameter to codex CLI', async () => {
+    const sessionId = sessionStorage.createSession();
     await handler.execute({
       prompt: 'Test prompt',
+      sessionId,
       model: 'gpt-4',
     });
 
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       'codex',
-      ['exec', '--model', 'gpt-4', '--skip-git-repo-check', 'Test prompt'],
+      expect.arrayContaining([
+        'exec',
+        '--model',
+        'gpt-4',
+        '--skip-git-repo-check',
+        'Test prompt',
+      ]),
       expect.any(Object)
     );
   });
 
   test('should pass reasoning effort to codex CLI', async () => {
+    const sessionId = sessionStorage.createSession();
     await handler.execute({
       prompt: 'Complex analysis',
+      sessionId,
       reasoningEffort: 'high',
     });
 
@@ -63,7 +75,7 @@ describe('Model Selection and Reasoning Effort', () => {
       [
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '-c',
         'model_reasoning_effort="high"',
         '--skip-git-repo-check',
@@ -74,8 +86,10 @@ describe('Model Selection and Reasoning Effort', () => {
   });
 
   test('should combine model and reasoning effort', async () => {
+    const sessionId = sessionStorage.createSession();
     await handler.execute({
       prompt: 'Advanced task',
+      sessionId,
       model: 'gpt-4',
       reasoningEffort: 'medium',
     });
@@ -96,8 +110,10 @@ describe('Model Selection and Reasoning Effort', () => {
   });
 
   test('should include model info in response metadata', async () => {
+    const sessionId = sessionStorage.createSession();
     const result = await handler.execute({
       prompt: 'Test prompt',
+      sessionId,
       model: 'gpt-3.5-turbo',
       reasoningEffort: 'low',
     });
@@ -122,38 +138,34 @@ describe('Model Selection and Reasoning Effort', () => {
   });
 
   test('should validate reasoning effort enum', async () => {
+    const sessionId = sessionStorage.createSession();
     await expect(
       handler.execute({
         prompt: 'Test',
+        sessionId,
         reasoningEffort: 'invalid' as 'low',
       })
     ).rejects.toThrow();
   });
 
-  test('should pass minimal reasoning effort to CLI', async () => {
-    await handler.execute({
-      prompt: 'Quick task',
-      reasoningEffort: 'minimal',
-    });
-
-    expect(mockedExecuteCommand).toHaveBeenCalledWith(
-      'codex',
-      [
-        'exec',
-        '--model',
-        'gpt-5.3-codex',
-        '-c',
-        'model_reasoning_effort="minimal"',
-        '--skip-git-repo-check',
-        'Quick task',
-      ],
-      expect.any(Object)
-    );
+  test("should reject 'minimal' reasoning effort (intentionally removed)", async () => {
+    // 'minimal' is no longer accepted: Codex's auto-enabled image_gen/web_search
+    // tools reject it with a 400. The fork explicitly removed it from the enum.
+    const sessionId = sessionStorage.createSession();
+    await expect(
+      handler.execute({
+        prompt: 'Quick task',
+        sessionId,
+        reasoningEffort: 'minimal' as 'low',
+      })
+    ).rejects.toThrow();
   });
 
   test('should pass none reasoning effort to CLI', async () => {
+    const sessionId = sessionStorage.createSession();
     await handler.execute({
       prompt: 'Simple task',
+      sessionId,
       reasoningEffort: 'none',
     });
 
@@ -162,7 +174,7 @@ describe('Model Selection and Reasoning Effort', () => {
       [
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '-c',
         'model_reasoning_effort="none"',
         '--skip-git-repo-check',
@@ -173,8 +185,10 @@ describe('Model Selection and Reasoning Effort', () => {
   });
 
   test('should pass xhigh reasoning effort to CLI', async () => {
+    const sessionId = sessionStorage.createSession();
     await handler.execute({
       prompt: 'Complex task',
+      sessionId,
       reasoningEffort: 'xhigh',
     });
 
@@ -183,7 +197,7 @@ describe('Model Selection and Reasoning Effort', () => {
       [
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '-c',
         'model_reasoning_effort="xhigh"',
         '--skip-git-repo-check',

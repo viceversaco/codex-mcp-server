@@ -13,11 +13,28 @@ export const TOOLS = {
 export type ToolName = typeof TOOLS[keyof typeof TOOLS];
 
 // Codex model constants
-export const DEFAULT_CODEX_MODEL = 'gpt-5.3-codex' as const;
+export const DEFAULT_CODEX_MODEL = 'gpt-5.5' as const;
 export const CODEX_DEFAULT_MODEL_ENV_VAR = 'CODEX_DEFAULT_MODEL' as const;
 
-// Available model options (for documentation/reference)
+// Reasoning effort constants
+export const DEFAULT_REASONING_EFFORT = 'xhigh' as const;
+export const CODEX_DEFAULT_REASONING_EFFORT_ENV_VAR =
+  'CODEX_DEFAULT_REASONING_EFFORT' as const;
+
+// Available reasoning effort levels (minimal omitted: Codex's auto-enabled
+// image_gen/web_search tools reject it with a 400)
+export const REASONING_EFFORT_LEVELS = [
+  'none',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const;
+
+// Available model options (non-exhaustive; the underlying Codex CLI accepts
+// any string, this list is for documentation/discovery only)
 export const AVAILABLE_CODEX_MODELS = [
+  'gpt-5.5',
   'gpt-5.3-codex',
   'gpt-5.2-codex',
   'gpt-5.1-codex',
@@ -33,9 +50,9 @@ export const AVAILABLE_CODEX_MODELS = [
 export const getModelDescription = (toolType: 'codex' | 'review') => {
   const modelList = AVAILABLE_CODEX_MODELS.join(', ');
   if (toolType === 'codex') {
-    return `Specify which model to use (defaults to ${DEFAULT_CODEX_MODEL}). Options: ${modelList}`;
+    return `Model identifier to pass to Codex CLI (defaults to ${DEFAULT_CODEX_MODEL}). Known options: ${modelList}. Any string is accepted — Codex CLI validates the actual identifier.`;
   }
-  return `Specify which model to use for the review (defaults to ${DEFAULT_CODEX_MODEL})`;
+  return `Model identifier for the review (defaults to ${DEFAULT_CODEX_MODEL})`;
 };
 
 // Tool annotations for MCP 2025-11-25 spec
@@ -97,11 +114,10 @@ export const CodexToolSchema = z.object({
     .max(256, { error: 'Session ID must be 256 characters or fewer' })
     .regex(/^[a-zA-Z0-9_-]+$/, {
       error: 'Session ID can only contain letters, numbers, hyphens, and underscores',
-    })
-    .optional(),
+    }),
   resetSession: z.boolean().optional(),
   model: z.string().optional(),
-  reasoningEffort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']).optional(),
+  reasoningEffort: z.enum(REASONING_EFFORT_LEVELS).optional(),
   sandbox: SandboxMode.optional(),
   fullAuto: z.boolean().optional(),
   workingDirectory: z.string().optional(),

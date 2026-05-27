@@ -1,6 +1,7 @@
 import { CodexToolHandler } from '../tools/handlers.js';
 import { InMemorySessionStorage } from '../session/storage.js';
 import { executeCommand } from '../utils/command.js';
+import { DEFAULT_CODEX_MODEL, DEFAULT_REASONING_EFFORT } from '../types.js';
 
 // Mock the command execution
 jest.mock('../utils/command.js', () => ({
@@ -38,41 +39,61 @@ describe('Default Model Configuration', () => {
     });
     process.env.STRUCTURED_CONTENT_ENABLED = '1';
     delete process.env.CODEX_MCP_CALLBACK_URI;
+    delete process.env.CODEX_DEFAULT_REASONING_EFFORT;
   });
 
-  test('should use gpt-5.3-codex as default model when no model specified', async () => {
-    await handler.execute({ prompt: 'Test prompt' });
+  test('should use default model when no model specified', async () => {
+    const sessionId = sessionStorage.createSession();
+    await handler.execute({ prompt: 'Test prompt', sessionId });
 
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       'codex',
-      [
+      expect.arrayContaining([
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '--skip-git-repo-check',
         'Test prompt',
-      ],
+      ]),
       expect.any(Object)
     );
   });
 
   test('should include default model in response metadata', async () => {
-    const result = await handler.execute({ prompt: 'Test prompt' });
+    const sessionId = sessionStorage.createSession();
+    const result = await handler.execute({ prompt: 'Test prompt', sessionId });
 
-    expect(result.content[0]._meta?.model).toBe('gpt-5.3-codex');
-    expect(result.structuredContent?.model).toBe('gpt-5.3-codex');
+    expect(result.content[0]._meta?.model).toBe(DEFAULT_CODEX_MODEL);
+    expect(result.structuredContent?.model).toBe(DEFAULT_CODEX_MODEL);
     expect(result._meta?.callbackUri).toBeUndefined();
   });
 
+  test('should include default reasoning effort in response metadata', async () => {
+    const sessionId = sessionStorage.createSession();
+    const result = await handler.execute({ prompt: 'Test prompt', sessionId });
+
+    expect(result.content[0]._meta?.reasoningEffort).toBe(
+      DEFAULT_REASONING_EFFORT
+    );
+  });
+
   test('should override default model when explicit model provided', async () => {
+    const sessionId = sessionStorage.createSession();
     await handler.execute({
       prompt: 'Test prompt',
+      sessionId,
       model: 'gpt-4',
     });
 
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       'codex',
-      ['exec', '--model', 'gpt-4', '--skip-git-repo-check', 'Test prompt'],
+      expect.arrayContaining([
+        'exec',
+        '--model',
+        'gpt-4',
+        '--skip-git-repo-check',
+        'Test prompt',
+      ]),
       expect.any(Object)
     );
   });
@@ -87,13 +108,13 @@ describe('Default Model Configuration', () => {
 
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       'codex',
-      [
+      expect.arrayContaining([
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '--skip-git-repo-check',
         'Test prompt',
-      ],
+      ]),
       expect.any(Object)
     );
   });
@@ -114,7 +135,9 @@ describe('Default Model Configuration', () => {
         'exec',
         '--skip-git-repo-check',
         '-c',
-        'model="gpt-5.3-codex"',
+        `model="${DEFAULT_CODEX_MODEL}"`,
+        '-c',
+        `model_reasoning_effort="${DEFAULT_REASONING_EFFORT}"`,
         'resume',
         'existing-conv-id',
         'Resume with default model',
@@ -124,8 +147,10 @@ describe('Default Model Configuration', () => {
   });
 
   test('should combine default model with reasoning effort', async () => {
+    const sessionId = sessionStorage.createSession();
     await handler.execute({
       prompt: 'Complex task',
+      sessionId,
       reasoningEffort: 'high',
     });
 
@@ -134,7 +159,7 @@ describe('Default Model Configuration', () => {
       [
         'exec',
         '--model',
-        'gpt-5.3-codex',
+        DEFAULT_CODEX_MODEL,
         '-c',
         'model_reasoning_effort="high"',
         '--skip-git-repo-check',
@@ -149,17 +174,18 @@ describe('Default Model Configuration', () => {
     process.env.CODEX_DEFAULT_MODEL = 'gpt-4';
 
     try {
-      await handler.execute({ prompt: 'Test with env var' });
+      const sessionId = sessionStorage.createSession();
+      await handler.execute({ prompt: 'Test with env var', sessionId });
 
       expect(mockedExecuteCommand).toHaveBeenCalledWith(
         'codex',
-        [
+        expect.arrayContaining([
           'exec',
           '--model',
           'gpt-4',
           '--skip-git-repo-check',
           'Test with env var',
-        ],
+        ]),
         expect.any(Object)
       );
     } finally {
@@ -176,20 +202,22 @@ describe('Default Model Configuration', () => {
     process.env.CODEX_DEFAULT_MODEL = 'gpt-4';
 
     try {
+      const sessionId = sessionStorage.createSession();
       await handler.execute({
         prompt: 'Test priority',
+        sessionId,
         model: 'gpt-3.5-turbo',
       });
 
       expect(mockedExecuteCommand).toHaveBeenCalledWith(
         'codex',
-        [
+        expect.arrayContaining([
           'exec',
           '--model',
           'gpt-3.5-turbo',
           '--skip-git-repo-check',
           'Test priority',
-        ],
+        ]),
         expect.any(Object)
       );
     } finally {

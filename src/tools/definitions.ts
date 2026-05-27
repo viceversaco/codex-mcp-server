@@ -3,7 +3,8 @@ import { TOOLS, getModelDescription, type ToolDefinition } from '../types.js';
 export const toolDefinitions: ToolDefinition[] = [
   {
     name: TOOLS.CODEX,
-    description: 'Execute Codex CLI in non-interactive mode for AI assistance',
+    description:
+      'Consult OpenAI Codex (default model: gpt-5.5, default reasoning: xhigh) for a deep second opinion. Supports multi-turn dialog when called with a stable sessionId across turns — Codex retains its own conversation context between calls.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -14,12 +15,12 @@ export const toolDefinitions: ToolDefinition[] = [
         sessionId: {
           type: 'string',
           description:
-            'Optional session ID for conversational context. Note: when resuming a session, sandbox/fullAuto/workingDirectory parameters are not applied (CLI limitation)',
+            'REQUIRED. Stable session ID for multi-turn conversational context. Pass the same ID across turns to retain Codex memory; use a fresh ID + resetSession=true to start over. Format: letters, digits, hyphens, underscores (max 256). Note: when resuming a session, sandbox/fullAuto/workingDirectory are not applied (Codex CLI limitation).',
         },
         resetSession: {
           type: 'boolean',
           description:
-            'Reset the session history before processing this request',
+            'Reset the session history before processing this request (use when forking a topic or starting fresh within an existing sessionId)',
         },
         model: {
           type: 'string',
@@ -27,9 +28,9 @@ export const toolDefinitions: ToolDefinition[] = [
         },
         reasoningEffort: {
           type: 'string',
-          enum: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+          enum: ['none', 'low', 'medium', 'high', 'xhigh'],
           description:
-            'Control reasoning depth (none < minimal < low < medium < high < xhigh)',
+            "Control reasoning depth (none < low < medium < high < xhigh). Defaults to 'xhigh' — this server is tuned for deep second-opinion consultation, not fast lookups. Note: 'minimal' is intentionally not offered; Codex's auto-enabled image_gen/web_search tools reject it with a 400.",
         },
         sandbox: {
           type: 'string',
@@ -53,7 +54,7 @@ export const toolDefinitions: ToolDefinition[] = [
             'Static MCP callback URI to pass to Codex via environment (if provided)',
         },
       },
-      required: ['prompt'],
+      required: ['prompt', 'sessionId'],
     },
     outputSchema: {
       type: 'object',

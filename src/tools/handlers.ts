@@ -2,6 +2,8 @@ import {
   TOOLS,
   DEFAULT_CODEX_MODEL,
   CODEX_DEFAULT_MODEL_ENV_VAR,
+  DEFAULT_REASONING_EFFORT,
+  CODEX_DEFAULT_REASONING_EFFORT_ENV_VAR,
   type ToolResult,
   type ToolHandlerContext,
   type CodexToolArgs,
@@ -16,7 +18,7 @@ import {
   WebSearchToolSchema,
 } from '../types.js';
 import {
-  InMemorySessionStorage,
+  FileSessionStorage,
   type SessionStorage,
   type ConversationTurn,
 } from '../session/storage.js';
@@ -97,6 +99,11 @@ export class CodexToolHandler {
         process.env[CODEX_DEFAULT_MODEL_ENV_VAR] ||
         DEFAULT_CODEX_MODEL;
 
+      const selectedEffort =
+        reasoningEffort ||
+        process.env[CODEX_DEFAULT_REASONING_EFFORT_ENV_VAR] ||
+        DEFAULT_REASONING_EFFORT;
+
       const effectiveCallbackUri =
         callbackUri || process.env.CODEX_MCP_CALLBACK_URI;
 
@@ -111,9 +118,7 @@ export class CodexToolHandler {
         cmdArgs.push('-c', `model="${selectedModel}"`);
 
         // Reasoning effort via config (before subcommand)
-        if (reasoningEffort) {
-          cmdArgs.push('-c', `model_reasoning_effort="${reasoningEffort}"`);
-        }
+        cmdArgs.push('-c', `model_reasoning_effort="${selectedEffort}"`);
 
         // Add resume subcommand with conversation ID and prompt
         cmdArgs.push('resume', codexConversationId, enhancedPrompt);
@@ -125,9 +130,7 @@ export class CodexToolHandler {
         cmdArgs.push('--model', selectedModel);
 
         // Add reasoning effort via config parameter (quoted for consistency)
-        if (reasoningEffort) {
-          cmdArgs.push('-c', `model_reasoning_effort="${reasoningEffort}"`);
-        }
+        cmdArgs.push('-c', `model_reasoning_effort="${selectedEffort}"`);
 
         // Add sandbox mode (v0.75.0+)
         if (sandbox) {
@@ -218,6 +221,7 @@ ${result.stdout || ''}`.trim();
       const metadata: Record<string, unknown> = {
         ...(threadId && { threadId }),
         ...(selectedModel && { model: selectedModel }),
+        ...(selectedEffort && { reasoningEffort: selectedEffort }),
         ...(activeSessionId && { sessionId: activeSessionId }),
         ...(effectiveCallbackUri && { callbackUri: effectiveCallbackUri }),
       };
@@ -576,7 +580,7 @@ export class WebSearchToolHandler {
 }
 
 // Tool handler registry
-const sessionStorage = new InMemorySessionStorage();
+const sessionStorage = new FileSessionStorage();
 
 export const toolHandlers = {
   [TOOLS.CODEX]: new CodexToolHandler(sessionStorage),

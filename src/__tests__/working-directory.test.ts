@@ -91,8 +91,10 @@ describe('Working Directory (cwd) Support', () => {
 
   describe('CodexToolHandler', () => {
     test('should pass cwd when workingDirectory is provided', async () => {
+      const sessionId = sessionStorage.createSession();
       await codexHandler.execute({
         prompt: 'Test prompt',
+        sessionId,
         workingDirectory: '/path/to/worktree',
       });
 
@@ -104,8 +106,10 @@ describe('Working Directory (cwd) Support', () => {
     });
 
     test('should pass undefined cwd when workingDirectory is omitted', async () => {
+      const sessionId = sessionStorage.createSession();
       await codexHandler.execute({
         prompt: 'Test prompt',
+        sessionId,
       });
 
       expect(mockedExecuteCommand).toHaveBeenCalledWith(

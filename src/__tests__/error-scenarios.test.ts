@@ -2,6 +2,7 @@ import { CodexToolHandler, ReviewToolHandler } from '../tools/handlers.js';
 import { InMemorySessionStorage } from '../session/storage.js';
 import { executeCommand } from '../utils/command.js';
 import { ToolExecutionError, ValidationError } from '../errors.js';
+import { DEFAULT_CODEX_MODEL } from '../types.js';
 
 // Mock the command execution
 jest.mock('../utils/command.js', () => ({
@@ -27,9 +28,10 @@ describe('Error Handling Scenarios', () => {
       new Error('Authentication failed: Please run `codex login`')
     );
 
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      ToolExecutionError
-    );
+    const sessionId = sessionStorage.createSession();
+    await expect(
+      handler.execute({ prompt: 'Test prompt', sessionId })
+    ).rejects.toThrow(ToolExecutionError);
   });
 
   test('should handle codex CLI not found errors', async () => {
@@ -37,9 +39,10 @@ describe('Error Handling Scenarios', () => {
       new Error('command not found: codex')
     );
 
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      ToolExecutionError
-    );
+    const sessionId = sessionStorage.createSession();
+    await expect(
+      handler.execute({ prompt: 'Test prompt', sessionId })
+    ).rejects.toThrow(ToolExecutionError);
   });
 
   test('should handle invalid model parameters', async () => {
@@ -47,9 +50,11 @@ describe('Error Handling Scenarios', () => {
       new Error('Invalid model: invalid-model')
     );
 
+    const sessionId = sessionStorage.createSession();
     await expect(
       handler.execute({
         prompt: 'Test prompt',
+        sessionId,
         model: 'invalid-model',
       })
     ).rejects.toThrow(ToolExecutionError);
@@ -60,8 +65,9 @@ describe('Error Handling Scenarios', () => {
       new Error('Timeout: Command took too long to execute')
     );
 
+    const sessionId = sessionStorage.createSession();
     await expect(
-      handler.execute({ prompt: 'Complex analysis task' })
+      handler.execute({ prompt: 'Complex analysis task', sessionId })
     ).rejects.toThrow(ToolExecutionError);
   });
 
@@ -70,13 +76,15 @@ describe('Error Handling Scenarios', () => {
       new Error('Network error: Unable to reach OpenAI API')
     );
 
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      ToolExecutionError
-    );
+    const sessionId = sessionStorage.createSession();
+    await expect(
+      handler.execute({ prompt: 'Test prompt', sessionId })
+    ).rejects.toThrow(ToolExecutionError);
   });
 
-  test('should handle invalid session IDs gracefully', async () => {
-    // Non-existent session ID should not crash
+  test('should handle non-existent session IDs gracefully', async () => {
+    // Passing a sessionId that doesn't yet exist in storage is fine —
+    // ensureSession() lazily creates it for valid IDs.
     mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr: '' });
 
     const result = await handler.execute({
@@ -152,12 +160,19 @@ describe('Error Handling Scenarios', () => {
 
     mockedExecuteCommand.mockResolvedValue({ stdout: 'Response', stderr: '' });
 
-    const result = await handler.execute({ prompt: longPrompt });
+    const sessionId = sessionStorage.createSession();
+    const result = await handler.execute({ prompt: longPrompt, sessionId });
 
     expect(result.content[0].text).toBe('Response');
     expect(mockedExecuteCommand).toHaveBeenCalledWith(
       'codex',
-      ['exec', '--model', 'gpt-5.3-codex', '--skip-git-repo-check', longPrompt],
+      expect.arrayContaining([
+        'exec',
+        '--model',
+        DEFAULT_CODEX_MODEL,
+        '--skip-git-repo-check',
+        longPrompt,
+      ]),
       expect.any(Object)
     );
   });

@@ -13,6 +13,7 @@ export default {
   transformIgnorePatterns: [
     'node_modules/(?!(chalk)/)',
   ],
+  setupFiles: ['<rootDir>/src/__tests__/setup.ts'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',

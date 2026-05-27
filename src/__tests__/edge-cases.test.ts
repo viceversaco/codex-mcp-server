@@ -19,6 +19,7 @@ describe('Edge Cases and Integration Issues', () => {
     sessionStorage = new InMemorySessionStorage();
     handler = new CodexToolHandler(sessionStorage);
     mockedExecuteCommand.mockClear();
+    delete process.env.CODEX_DEFAULT_REASONING_EFFORT;
   });
 
   test('should handle model parameters with resume', async () => {
@@ -93,23 +94,34 @@ describe('Edge Cases and Integration Issues', () => {
   test('should handle command execution failures', async () => {
     mockedExecuteCommand.mockRejectedValue(new Error('Codex CLI not found'));
 
-    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow(
-      'Failed to execute codex command'
-    );
+    const sessionId = sessionStorage.createSession();
+    await expect(
+      handler.execute({ prompt: 'Test prompt', sessionId })
+    ).rejects.toThrow('Failed to execute codex command');
   });
 
   test('should handle empty/malformed CLI responses', async () => {
     mockedExecuteCommand.mockResolvedValue({ stdout: '', stderr: '' });
 
-    const result = await handler.execute({ prompt: 'Test prompt' });
+    const sessionId = sessionStorage.createSession();
+    const result = await handler.execute({
+      prompt: 'Test prompt',
+      sessionId,
+    });
 
     expect(result.content[0].text).toBe('No output from Codex');
   });
 
   test('should validate prompt parameter exists', async () => {
+    const sessionId = sessionStorage.createSession();
     await expect(
-      handler.execute({}) // Missing required prompt
+      handler.execute({ sessionId }) // Missing required prompt
     ).rejects.toThrow();
+  });
+
+  test('should require sessionId (no longer optional)', async () => {
+    // sessionId is now REQUIRED by the schema. Calls without it must reject.
+    await expect(handler.execute({ prompt: 'Test prompt' })).rejects.toThrow();
   });
 
   test('should handle long conversation contexts', async () => {
@@ -131,9 +143,13 @@ describe('Edge Cases and Integration Issues', () => {
       sessionId,
     });
 
-    // Should only use recent turns, not crash with too much context
+    // Should only use recent turns, not crash with too much context.
+    // Locate the prompt argument by content rather than fixed index.
     const call = mockedExecuteCommand.mock.calls[0];
-    const prompt = call?.[1]?.[4]; // After exec, --model, gpt-5.3-codex, --skip-git-repo-check, prompt
+    const args = (call?.[1] as string[]) || [];
+    const prompt = args.find(
+      (a) => typeof a === 'string' && a.includes('Final question')
+    );
     expect(typeof prompt).toBe('string');
     if (prompt) {
       expect(prompt.length).toBeLessThan(5000); // Reasonable limit
